@@ -1,45 +1,83 @@
 import socket
 import threading
+import argparse
 
-s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-s.bind(('0.0.0.0', 7774))
+# global data
+shells = [] # [{addr,port,conn}]
+def write_log(filename, entry):
+    with open(filename, 'a') as file:
+            file.write(entry)
 
-shells = []
-
-
+# handle incoming connections
 def handle_connections():
-    print(f'listening for connections...')
+    # socket
+    print(f'opening listener on {ip}:{port}... ', end='')
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    s.bind((ip, port))
+    print('done. :)')
+    # listen
     while True:
         s.listen(1)
         conn, addr = s.accept()
-        print(f'\n[connection received {addr}]')
+        log = f'[connection received {addr}]'
+        print(f'\n{log}')
+        write_log(addr[0], log+'\n')
         shells.append({'addr': addr[0], 'port': addr[1], 'conn': conn})
 
-def show_shells():
+# cli funcs
+def show_shells(): # print all items in the shells global var
     for i in range(len(shells)):
         print(f'[{i}] {shells[i]["addr"]}')
 
-def send_command():
-    shell = int(input('shell#> '))
-    if  0 > shell > len(shells)-1:
+def send_command(): # send a command to a shell
+    shell_index = int(input('shell#> '))
+    if  0 > shell_index > len(shells)-1:
         print('invalid shell index')
         return -1
-    shell = shells[shell]
+    shell = shells[shell_index]
     cmd = input('cmd> ')
     cmd = cmd+'\n'
     shell['conn'].sendall(cmd.encode('utf-8'))
     resp = shell['conn'].recv(1024)
+    write_log(shell['addr'], cmd)
+    write_log(shell['addr'], resp.decode('utf-8'))
     print(resp.decode('utf-8'))
 
+def do_interactive():
+    shell_index = int(input('shell#> '))
+    if  0 > shell_index > len(shells)-1:
+        print('invalid shell index')
+        return -1
+    shell = shells[shell_index]
+    while True:
+        cmd = input(f'{shell_index}$')
+        if cmd == '.exit': return 0
+        cmd = cmd+'\n'
+        shell['conn'].sendall(cmd.encode('utf-8'))
+        resp = shell['conn'].recv(1024)
+        write_log(shell['addr'], cmd)
+        write_log(shell['addr'], resp.decode('utf-8'))
+        print(resp.decode('utf-8'))
 
+# args
+parser = argparse.ArgumentParser()
+parser.add_argument('-p', '--port', default=7774, type=int)
+args = parser.parse_args()
+port = args.port
+ip = '0.0.0.0'
+
+# start listener
+t = threading.Thread(target=handle_connections, daemon=True).start()
+
+# cli
 opts = {
     'shells': show_shells,
     'send': send_command,
+    'interactive': do_interactive,
+    'i': do_interactive, 
     'exit': exit
 }
-
-t = threading.Thread(target=handle_connections, daemon=True).start()
 while True:
     cmd = input('> ')
     if cmd in opts: opts[cmd]()
